@@ -8,9 +8,11 @@ on:
   pull_request:
 
 jobs:
-  terraform:
+  plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
-    
+
+    # Keep AWS creds as you have them
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -32,11 +34,50 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan
+        # Save the precise plan that reviewers will approve
+        run: terraform plan -out=tfplan.binary
 
       - name: Upload Plan Artifact
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan
-          path: tfplan
+          path: tfplan.binary
 
+  apply:
+    name: Terraform Apply (requires approval)
+    runs-on: ubuntu-latest
+    needs: plan
+
+    # Only apply on push to main (skip during PRs)
+    if: github.event_name == 'push' && contains(github.ref, 'refs/heads/main')
+
+    # 👇 Gate this job with Environment approvals
+    # Configure "prod" environment reviewers in repo Settings → Environments
+    environment: prod
+
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+          path: .
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        # Apply the exact artifact reviewers saw
+        run: terraform apply -input=false tfplan.binary
