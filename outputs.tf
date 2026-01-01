@@ -13,3 +13,8 @@ output "ssh_command" {
   value       = "ssh -i ~/.ssh/harsha-key ec2-user@${aws_instance.instance_one.public_ip}"
 }
 
+output "private_key_pem" {
+  description = "Terraform-generated private key (PEM). Store securely."
+  value       = tls_private_key.harsha.private_key_pem
+  sensitive   = true
+}
