@@ -25,9 +25,15 @@ locals {
   public_key_path = "${pathexpand("~/.ssh/harsha-key.pub")}"
 }
 
+
+resource "tls_private_key" "harsha" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
 resource "aws_key_pair" "harsha" {
   key_name   = var.key_pair_name
-  public_key = file(local.public_key_path)
+  public_key = tls_private_key.harsha.public_key_openssh
 }
 
 #security group for SSH into ec2 instance
